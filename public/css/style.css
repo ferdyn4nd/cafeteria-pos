@@ -1,0 +1,211 @@
+:root{
+--bg:#0f172a;
+--nav:#020617;
+--card:#334155;
+--primary:#22c55e;
+--accent:#38bdf8;
+--text:#f8fafc;
+}
+
+*{
+box-sizing:border-box;
+font-family:system-ui,Arial;
+}
+
+body{
+margin:0;
+background:var(--bg);
+color:var(--text);
+height:100vh;
+display:flex;
+flex-direction:column;
+}
+
+/* HEADER */
+
+header{
+background:var(--nav);
+padding:15px;
+font-size:22px;
+text-align:center;
+border-bottom:2px solid var(--accent);
+}
+
+/* NAV */
+
+.nav{
+display:flex;
+gap:10px;
+padding:10px;
+background:var(--nav);
+}
+
+.nav button{
+flex:1;
+background:var(--card);
+border:none;
+color:white;
+padding:10px;
+border-radius:6px;
+cursor:pointer;
+}
+
+/* LAYOUT */
+
+.container{
+flex:1;
+display:grid;
+grid-template-columns:2fr 1fr;
+}
+
+/* PANELS */
+
+.panel{
+padding:15px;
+overflow:auto;
+}
+
+.hidden{
+display:none;
+}
+
+/* MENU */
+
+#menu>div{
+background:var(--card);
+padding:10px;
+margin-bottom:6px;
+border-radius:6px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+/* ORDER */
+
+#order>div{
+background:var(--card);
+padding:8px;
+margin-bottom:5px;
+border-radius:5px;
+display:flex;
+justify-content:space-between;
+}
+
+.total{
+font-size:20px;
+text-align:center;
+margin:10px 0;
+}
+
+/* BUTTON */
+
+button{
+background:var(--accent);
+border:none;
+padding:5px 10px;
+border-radius:5px;
+cursor:pointer;
+}
+
+button:disabled{
+background:#475569;
+}
+
+/* SPECIAL */
+
+.btn{
+width:100%;
+padding:10px;
+margin-bottom:8px;
+font-size:14px;
+}
+
+.agregar,
+.cobrar{
+background:var(--primary);
+color:#052e16;
+}
+
+/* TABLE */
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th{
+background:var(--nav);
+padding:6px;
+}
+
+td{
+background:var(--card);
+padding:5px;
+text-align:center;
+}
+/* ===============================
+   TABLET MODE
+================================ */
+
+@media (max-width: 1024px){
+
+  body{
+    font-size:18px;
+  }
+
+  header{
+    font-size:26px;
+    padding:20px;
+  }
+
+  .nav button{
+    font-size:18px;
+    padding:16px;
+  }
+
+  .container{
+    grid-template-columns:1fr;
+  }
+
+  #menu{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:12px;
+  }
+
+  #menu > div{
+    flex-direction:column;
+    text-align:center;
+    gap:8px;
+    padding:16px;
+  }
+
+  #menu button{
+    font-size:20px;
+    padding:12px 20px;
+  }
+
+  #order > div{
+    font-size:18px;
+  }
+
+  .btn{
+    font-size:18px;
+    padding:16px;
+  }
+
+  .total{
+    font-size:26px;
+  }
+}
+/* REPORTES */
+
+.report-box {
+  background: #f1f5f9;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 6px;
+  font-size: 18px;
+  border-left: 5px solid #2563eb;
+}

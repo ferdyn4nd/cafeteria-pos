@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>POS Cafetería</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<link rel="stylesheet" href="/css/style.css?v=1">
+</head>
+
+<body>
+
+<header>☕ POS Cafetería</header>
+
+<nav class="nav">
+  <button onclick="showMenu()">🧾 Ventas</button>
+  <button onclick="showInventory()">📦 Inventario</button>
+  <button onclick="showSalesHistory()">📊 Historial</button>
+  <button onclick="showCorteHoy()">💰 Corte</button>
+  <button onclick="showReports()">
+  📊 Reportes
+</button>
+
+</nav>
+
+<div class="container">
+
+<!-- VENTAS -->
+<section id="salesView" class="panel">
+
+<h2>Menú</h2>
+
+
+<div id="menu"></div>
+<!-- REPORTES -->
+<section id="reportsView" class="panel hidden">
+
+  <h2>📊 Reportes</h2>
+
+  <div class="report-box">
+    Hoy: <b>$<span id="todayTotal">0</span></b>
+  </div>
+
+  <div class="report-box">
+    Semana: <b>$<span id="weekTotal">0</span></b>
+  </div>
+
+  <div class="report-box">
+    Mes: <b>$<span id="monthTotal">0</span></b>
+  </div>
+<button onclick="verHistorial()">Ver Historial</button>
+<button onclick="verCorte()">Ver Corte</button>
+9o
+</section>
+
+</section>
+
+<!-- INVENTARIO -->
+<section id="inventoryView" class="panel hidden">
+
+<h2>Inventario</h2>
+
+<table>
+<thead>
+<tr>
+<th>Producto</th>
+<th>Precio</th>
+<th>Stock</th>
+<th>Acciones</th>
+</tr>
+</thead>
+
+<tbody id="inventoryTable"></tbody>
+</table>
+
+</section>
+
+<!-- ORDEN -->
+<section id="orderView" class="panel">
+
+<h2>Orden</h2>
+
+<div id="order"></div>
+
+<div class="total">
+Total: <span id="total">$0</span>
+</div>
+
+<button class="btn cobrar" onclick="checkout('efectivo')">
+💵 Cobrar
+</button>
+
+</section>
+
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

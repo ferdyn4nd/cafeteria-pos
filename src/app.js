@@ -1,256 +1,238 @@
-// ===============================
-// IMPORTS
-// ===============================
-const express = require('express');
-const bodyParser = require('body-parser');
-const Database = require('better-sqlite3');
-const path = require('path');
+// ================================
+//  CAFETERIA POS - CLOUD SERVER
+//  PostgreSQL + Render Ready
+// ================================
 
-// ===============================
-// INIT
-// ===============================
-const app = express();
+require("dotenv").config();
+
+const express = require("express");
+const path = require("path");
+const cors = require("cors");
+const { Pool } = require("pg");
+
+// -------------------------------
+// CONFIG
+// -------------------------------
+
 const PORT = process.env.PORT || 5000;
 
-// ===============================
-// DB
-// ===============================
-const db = new Database('./db.sqlite');
-
-// ===============================
-// MIDDLEWARE
-// ===============================
-app.use(bodyParser.json());
-app.use(express.static('public'));
-
-// ===============================
-// CREAR TABLAS
-// ===============================
-db.prepare(`
-CREATE TABLE IF NOT EXISTS products (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  price REAL,
-  stock INTEGER
-)
-`).run();
-
-db.prepare(`
-CREATE TABLE IF NOT EXISTS sales (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  total REAL,
-  payment TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)
-`).run();
-
-db.prepare(`
-CREATE TABLE IF NOT EXISTS sale_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sale_id INTEGER,
-  product_id INTEGER,
-  qty INTEGER,
-  price REAL
-)
-`).run();
-
-// ===============================
-// API MENU
-// ===============================
-app.get('/api/menu', (req, res) => {
-
-  const products = db
-    .prepare('SELECT * FROM products')
-    .all();
-
-  res.json(products);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// ===============================
-// AGREGAR PRODUCTO
-// ===============================
-app.post('/api/product/add', (req, res) => {
+// -------------------------------
+// INIT APP
+// -------------------------------
 
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "../public")));
+
+// -------------------------------
+// INIT DATABASE
+// -------------------------------
+
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      price NUMERIC NOT NULL,
+      stock INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales (
+      id SERIAL PRIMARY KEY,
+      total NUMERIC NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sale_items (
+      id SERIAL PRIMARY KEY,
+      sale_id INTEGER REFERENCES sales(id),
+      product_id INTEGER REFERENCES products(id),
+      quantity INTEGER,
+      price NUMERIC
+    );
+  `);
+
+  console.log("✅ Base de datos lista (Postgres)");
+}
+
+initDB();
+
+// -------------------------------
+// PRODUCTS
+// -------------------------------
+
+// Obtener
+app.get("/api/products", async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM products ORDER BY id DESC"
+  );
+
+  res.json(result.rows);
+});
+
+// Crear
+app.post("/api/products", async (req, res) => {
   const { name, price, stock } = req.body;
 
-  if (!name || price == null || stock == null) {
-    return res.status(400).json({ error: 'Datos incompletos' });
+  if (!name || !price) {
+    return res.status(400).json({ error: "Datos incompletos" });
   }
 
-  db.prepare(`
+  const result = await pool.query(
+    `
     INSERT INTO products (name, price, stock)
-    VALUES (?,?,?)
-  `).run(name, price, stock);
+    VALUES ($1,$2,$3)
+    RETURNING id
+    `,
+    [name, price, stock || 0]
+  );
+
+  res.json({ id: result.rows[0].id });
+});
+
+// Actualizar
+app.put("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, price, stock } = req.body;
+
+  await pool.query(
+    `
+    UPDATE products
+    SET name=$1, price=$2, stock=$3
+    WHERE id=$4
+    `,
+    [name, price, stock, id]
+  );
 
   res.json({ success: true });
 });
 
-// ===============================
-// EDITAR PRODUCTO
-// ===============================
-app.post('/api/product/edit', (req, res) => {
+// Borrar
+app.delete("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
 
-  const { id, name, price } = req.body;
-
-  db.prepare(`
-    UPDATE products
-    SET name=?, price=?
-    WHERE id=?
-  `).run(name, price, id);
+  await pool.query(
+    "DELETE FROM products WHERE id=$1",
+    [id]
+  );
 
   res.json({ success: true });
 });
 
-// ===============================
-// AGREGAR STOCK
-// ===============================
-app.post('/api/stock/add', (req, res) => {
+// -------------------------------
+// SALES
+// -------------------------------
 
-  const { id, amount } = req.body;
+// Crear venta
+app.post("/api/sales", async (req, res) => {
+  const { items, total } = req.body;
 
-  if (!id || !amount) {
-    return res.status(400).json({ error: 'Datos inválidos' });
+  if (!items || !items.length) {
+    return res.status(400).json({ error: "Sin productos" });
   }
 
-  db.prepare(`
-    UPDATE products
-    SET stock = stock + ?
-    WHERE id = ?
-  `).run(amount, id);
+  const client = await pool.connect();
 
-  res.json({ success: true });
-});
+  try {
+    await client.query("BEGIN");
 
-// ===============================
-// VENTA
-// ===============================
-app.post('/api/sale', (req, res) => {
-
-  const { items, payment } = req.body;
-
-  if (!items || items.length === 0) {
-    return res.status(400).json({ error: 'Orden vacía' });
-  }
-
-  // VALIDAR STOCK
-  for (const item of items) {
-
-    const p = db
-      .prepare('SELECT stock FROM products WHERE id=?')
-      .get(item.id);
-
-    if (!p || p.stock < item.qty) {
-      return res.status(400).json({
-        error: `Stock insuficiente: ${item.name}`
-      });
-    }
-  }
-
-  // CALCULAR TOTAL
-  let total = 0;
-
-  items.forEach(i => {
-    total += i.price * i.qty;
-  });
-
-  // REGISTRAR VENTA
-  const sale = db.prepare(`
-    INSERT INTO sales (total, payment)
-    VALUES (?,?)
-  `).run(total, payment);
-
-  const saleId = sale.lastInsertRowid;
-
-  // GUARDAR ITEMS + DESCONTAR
-  const insertItem = db.prepare(`
-    INSERT INTO sale_items
-    (sale_id, product_id, qty, price)
-    VALUES (?,?,?,?)
-  `);
-
-  const discount = db.prepare(`
-    UPDATE products
-    SET stock = stock - ?
-    WHERE id = ?
-  `);
-
-  items.forEach(item => {
-
-    insertItem.run(
-      saleId,
-      item.id,
-      item.qty,
-      item.price
+    const sale = await client.query(
+      "INSERT INTO sales (total) VALUES ($1) RETURNING id",
+      [total]
     );
 
-    discount.run(item.qty, item.id);
-  });
+    const saleId = sale.rows[0].id;
+
+    for (const item of items) {
+      await client.query(
+        `
+        INSERT INTO sale_items
+        (sale_id, product_id, quantity, price)
+        VALUES ($1,$2,$3,$4)
+        `,
+        [saleId, item.id, item.quantity, item.price]
+      );
+
+      await client.query(
+        `
+        UPDATE products
+        SET stock = stock - $1
+        WHERE id = $2
+        `,
+        [item.quantity, item.id]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    res.json({ success: true });
+
+  } catch (err) {
+
+    await client.query("ROLLBACK");
+
+    console.error(err);
+
+    res.status(500).json({ error: "Error en venta" });
+
+  } finally {
+    client.release();
+  }
+});
+
+// Historial
+app.get("/api/sales", async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM sales ORDER BY id DESC"
+  );
+
+  res.json(result.rows);
+});
+
+// Reporte
+app.get("/api/reports", async (req, res) => {
+  const total = await pool.query(
+    "SELECT SUM(total) FROM sales"
+  );
+
+  const count = await pool.query(
+    "SELECT COUNT(*) FROM sales"
+  );
 
   res.json({
-    success: true,
-    total
+    total: total.rows[0].sum || 0,
+    ventas: count.rows[0].count || 0,
   });
 });
 
-// ===============================
-// REPORTES
-// ===============================
-app.get('/api/reports', (req, res) => {
-
-  const today = db.prepare(`
-    SELECT IFNULL(SUM(total),0) total
-    FROM sales
-    WHERE DATE(created_at)=DATE('now')
-  `).get().total;
-
-  const week = db.prepare(`
-    SELECT IFNULL(SUM(total),0) total
-    FROM sales
-    WHERE DATE(created_at)>=DATE('now','-6 days')
-  `).get().total;
-
-  const month = db.prepare(`
-    SELECT IFNULL(SUM(total),0) total
-    FROM sales
-    WHERE strftime('%Y-%m',created_at)=strftime('%Y-%m','now')
-  `).get().total;
-app.get('/api/sales', (req, res) => {
-
-  const sales = db.prepare(`
-    SELECT * FROM sales
-    ORDER BY created_at DESC
-  `).all();
-
-  res.json(sales);
-});
-app.get('/api/corte', (req, res) => {
-
-  const data = db.prepare(`
-    SELECT 
-      COUNT(*) as totalVentas,
-      IFNULL(SUM(total),0) as totalDinero
-    FROM sales
-    WHERE DATE(created_at)=DATE('now')
-  `).get();
-
-  res.json(data);
-});
-
-  res.json({ today, week, month });
-});
-
-// ===============================
+// -------------------------------
 // FRONTEND
-// ===============================
-app.get('/', (req, res) => {
+// -------------------------------
+
+app.get("*", (req, res) => {
   res.sendFile(
-    path.join(__dirname, '../public/index.html')
+    path.join(__dirname, "../public/index.html")
   );
 });
 
-// ===============================
-// START
-// ===============================
+// -------------------------------
+// START SERVER
+// -------------------------------
+
 app.listen(PORT, () => {
-  console.log('Servidor en http://localhost:' + PORT);
+  console.log("🚀 Servidor corriendo en puerto " + PORT);
 });

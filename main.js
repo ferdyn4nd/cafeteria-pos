@@ -1,44 +1,46 @@
 const { app, BrowserWindow } = require('electron');
-const { spawn } = require('child_process');
 const path = require('path');
 
-let serverProcess;
-
-function startServer() {
-
-  const serverPath = path.join(__dirname, 'src', 'app.js');
-
-  serverProcess = spawn(process.execPath, [serverPath], {
-    cwd: __dirname
-  });
-
-  serverProcess.stdout.on('data', data => {
-    console.log('[SERVER]', data.toString());
-  });
-
-  serverProcess.stderr.on('data', data => {
-    console.error('[SERVER ERROR]', data.toString());
-  });
-}
+let mainWindow;
 
 function createWindow() {
-
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    autoHideMenuBar: true
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
   });
 
-  setTimeout(() => {
-win.loadURL('http://localhost:9090');
-  }, 3000);
+  const isDev = !app.isPackaged;
+
+  if (isDev) {
+    // Modo desarrollo (tu compu)
+    mainWindow.loadURL('http://localhost:5000');
+  } else {
+    // Modo producción (Render)
+    mainWindow.loadURL('https://cafeteria-pos.onrender.com');
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-app.whenReady().then(() => {
-  startServer();
-  createWindow();
+// Cuando Electron esté listo
+app.whenReady().then(createWindow);
+
+// Para Windows / Mac
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
-app.on('quit', () => {
-  if (serverProcess) serverProcess.kill();
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
 });

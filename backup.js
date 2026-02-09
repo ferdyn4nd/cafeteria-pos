@@ -7,7 +7,7 @@ const path = require('path');
 
 // Rutas
 const DB_FILE = path.join(__dirname, 'db.sqlite');
-const BACKUP_DIR = 'C:/PROYECTOS/backups-pos';
+const BACKUP_DIR = 'C:/Usuarios /perez/OneDrive/backups-pos';
 
 // Fecha bonita
 function getDate() {

@@ -93,7 +93,27 @@ async function initDB() {
   }
 }
 
-initDB();
+initDB().then(async () => {
+
+  const check = await pool.query("SELECT COUNT(*) FROM products");
+
+  if (parseInt(check.rows[0].count) === 0) {
+
+    console.log("⚡ Base vacía, cargando productos iniciales...");
+
+    await pool.query(`
+      INSERT INTO products (name, price, stock) VALUES
+      ('Café Americano', 30, 20),
+      ('Capuchino', 40, 15),
+      ('Latte', 45, 10),
+      ('Chocolate', 35, 12),
+      ('Pan Dulce', 15, 25)
+    `);
+
+    console.log("✅ Productos iniciales cargados");
+  }
+
+});
 
 // ================================
 // PRODUCTS

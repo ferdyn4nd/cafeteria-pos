@@ -1,24 +1,36 @@
 // ===============================
-// CONFIG
+// CAFETERIA POS - FRONTEND
+// Compatible con Render + PostgreSQL
 // ===============================
-const API_URL = "https://cafeteria-pos.onrender.com";
 
+// 👉 MISMO DOMINIO (Render)
+const API_URL = "";
+
+// ===============================
+// STATE
+// ===============================
 let menu = [];
 let order = [];
 
+// ===============================
 // INIT
+// ===============================
 loadMenu();
 showMenu();
 setInterval(loadMenu, 5000);
 
 // ===============================
-// LOAD
+// LOAD MENU
 // ===============================
 async function loadMenu() {
-  const res = await fetch(`${API_URL}/api/products`);
-  menu = await res.json();
-  renderMenu();
-  renderInventory();
+  try {
+    const res = await fetch(`${API_URL}/api/products`);
+    menu = await res.json();
+    renderMenu();
+    renderInventory();
+  } catch (err) {
+    console.error("Error cargando productos", err);
+  }
 }
 
 // ===============================
@@ -28,20 +40,16 @@ function renderMenu() {
   const div = document.getElementById("menu");
   div.innerHTML = "";
 
-  menu.forEach((p) => {
+  menu.forEach(p => {
     const el = document.createElement("div");
-
     el.innerHTML = `
       <span>
         <b>${p.name}</b> | $${p.price} | Stock: ${p.stock}
       </span>
       <span>
-        <button onclick="addToOrder(${p.id})" ${
-      p.stock <= 0 ? "disabled" : ""
-    }>+</button>
+        <button onclick="addToOrder(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>+</button>
       </span>
     `;
-
     div.appendChild(el);
   });
 }
@@ -53,21 +61,17 @@ function renderInventory() {
   const tb = document.getElementById("inventoryTable");
   tb.innerHTML = "";
 
+  // Botón agregar
   const header = document.createElement("tr");
-
   header.innerHTML = `
     <td colspan="4" style="text-align:right; padding:10px;">
-      <button onclick="addProduct()" class="btn agregar">
-        ➕ Agregar Producto
-      </button>
+      <button onclick="addProduct()">➕ Agregar Producto</button>
     </td>
   `;
-
   tb.appendChild(header);
 
-  menu.forEach((p) => {
+  menu.forEach(p => {
     const tr = document.createElement("tr");
-
     tr.innerHTML = `
       <td>${p.name}</td>
       <td>$${p.price}</td>
@@ -77,7 +81,6 @@ function renderInventory() {
         <button onclick="addStock(${p.id})">📦</button>
       </td>
     `;
-
     tb.appendChild(tr);
   });
 }
@@ -97,7 +100,7 @@ function showInventory() {
 }
 
 function hideAll() {
-  document.querySelectorAll(".panel").forEach((p) => {
+  document.querySelectorAll(".panel").forEach(p => {
     p.classList.add("hidden");
   });
 }
@@ -106,12 +109,10 @@ function hideAll() {
 // ORDER
 // ===============================
 function addToOrder(id) {
-  const p = menu.find((x) => x.id === id);
-
+  const p = menu.find(x => x.id === id);
   if (!p || p.stock <= 0) return;
 
-  const ex = order.find((x) => x.id === id);
-
+  const ex = order.find(x => x.id === id);
   if (ex) ex.qty++;
   else order.push({ ...p, qty: 1 });
 
@@ -121,22 +122,17 @@ function addToOrder(id) {
 function renderOrder() {
   const d = document.getElementById("order");
   const t = document.getElementById("total");
-
   d.innerHTML = "";
-
   let total = 0;
 
-  order.forEach((i) => {
+  order.forEach(i => {
     const sub = i.price * i.qty;
     total += sub;
-
     const el = document.createElement("div");
-
     el.innerHTML = `
       ${i.name} x${i.qty} → $${sub}
       <button onclick="removeItem(${i.id})">✕</button>
     `;
-
     d.appendChild(el);
   });
 
@@ -144,7 +140,7 @@ function renderOrder() {
 }
 
 function removeItem(id) {
-  order = order.filter((x) => x.id !== id);
+  order = order.filter(x => x.id !== id);
   renderOrder();
 }
 
@@ -152,8 +148,7 @@ function removeItem(id) {
 // INVENTORY ACTIONS
 // ===============================
 async function editInv(id) {
-  const p = menu.find((x) => x.id === id);
-
+  const p = menu.find(x => x.id === id);
   const name = prompt("Nombre", p.name);
   const price = parseFloat(prompt("Precio", p.price));
   const stock = parseInt(prompt("Stock", p.stock));
@@ -163,18 +158,17 @@ async function editInv(id) {
   await fetch(`${API_URL}/api/products/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, price, stock }),
+    body: JSON.stringify({ name, price, stock })
   });
 
   loadMenu();
 }
 
 async function addStock(id) {
-  const a = parseInt(prompt("Cantidad"));
+  const amount = parseInt(prompt("Cantidad"));
+  if (!amount) return;
 
-  if (!a) return;
-
-  const p = menu.find((x) => x.id === id);
+  const p = menu.find(x => x.id === id);
 
   await fetch(`${API_URL}/api/products/${id}`, {
     method: "PUT",
@@ -182,8 +176,8 @@ async function addStock(id) {
     body: JSON.stringify({
       name: p.name,
       price: p.price,
-      stock: p.stock + a,
-    }),
+      stock: p.stock + amount
+    })
   });
 
   loadMenu();
@@ -197,12 +191,12 @@ async function addProduct() {
   const price = parseFloat(prompt("Precio"));
   const stock = parseInt(prompt("Stock"));
 
-  if (!name || isNaN(price) || stock < 0) return;
+  if (!name || isNaN(price) || isNaN(stock)) return;
 
   await fetch(`${API_URL}/api/products`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, price, stock }),
+    body: JSON.stringify({ name, price, stock })
   });
 
   loadMenu();
@@ -214,36 +208,16 @@ async function addProduct() {
 async function checkout() {
   if (!order.length) return;
 
-  const total = order.reduce(
-    (s, i) => s + i.price * i.qty,
-    0
-  );
+  const total = order.reduce((s, i) => s + i.price * i.qty, 0);
 
   await fetch(`${API_URL}/api/sales`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: order, total }),
+    body: JSON.stringify({ items: order, total })
   });
 
-  alert("Venta registrada");
-
+  alert("Venta realizada: $" + total);
   order = [];
   renderOrder();
   loadMenu();
-}
-
-// ===============================
-// REPORTES
-// ===============================
-async function showSalesHistory() {
-  const r = await fetch(`${API_URL}/api/sales`);
-  const d = await r.json();
-
-  let t = "📊 HISTORIAL\n\n";
-
-  d.forEach((s) => {
-    t += `$${s.total} | ${s.created_at}\n`;
-  });
-
-  alert(t);
 }

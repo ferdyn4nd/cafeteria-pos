@@ -3,7 +3,7 @@
 // ===============================
 
 // 👉 MISMO DOMINIO (Render)
-const API_URL = "";
+const API_URL = window.location.origin;
 
 // ===============================
 // STATE

@@ -1,6 +1,5 @@
 // ===============================
 // CAFETERIA POS - FRONTEND
-// Compatible con Render + PostgreSQL
 // ===============================
 
 // 👉 MISMO DOMINIO (Render)
@@ -26,10 +25,11 @@ async function loadMenu() {
   try {
     const res = await fetch(`${API_URL}/api/products`);
     menu = await res.json();
+
     renderMenu();
     renderInventory();
   } catch (err) {
-    console.error("Error cargando productos", err);
+    console.error("❌ Error cargando productos", err);
   }
 }
 
@@ -38,18 +38,27 @@ async function loadMenu() {
 // ===============================
 function renderMenu() {
   const div = document.getElementById("menu");
+  if (!div) return;
+
   div.innerHTML = "";
 
   menu.forEach(p => {
     const el = document.createElement("div");
+
     el.innerHTML = `
       <span>
-        <b>${p.name}</b> | $${p.price} | Stock: ${p.stock}
+        <b>${p.name}</b> | $${p.price} | Stock: ${p.stock ?? 0}
       </span>
+
       <span>
-        <button onclick="addToOrder(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>+</button>
+        <button 
+          onclick="addToOrder(${p.id})"
+          ${p.stock <= 0 ? "disabled" : ""}>
+          +
+        </button>
       </span>
     `;
+
     div.appendChild(el);
   });
 }
@@ -59,50 +68,80 @@ function renderMenu() {
 // ===============================
 function renderInventory() {
   const tb = document.getElementById("inventoryTable");
+  if (!tb) return;
+
   tb.innerHTML = "";
 
-  // Botón agregar
   const header = document.createElement("tr");
+
   header.innerHTML = `
     <td colspan="4" style="text-align:right; padding:10px;">
       <button onclick="addProduct()">➕ Agregar Producto</button>
     </td>
   `;
+
   tb.appendChild(header);
 
   menu.forEach(p => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
       <td>${p.name}</td>
       <td>$${p.price}</td>
-      <td>${p.stock}</td>
+      <td>${p.stock ?? 0}</td>
+
       <td>
         <button onclick="editInv(${p.id})">✏️</button>
         <button onclick="addStock(${p.id})">📦</button>
       </td>
     `;
+
     tb.appendChild(tr);
   });
 }
 
 // ===============================
-// VIEWS
+// NAV / VIEWS
 // ===============================
-function showMenu() {
-  hideAll();
-  document.getElementById("salesView").classList.remove("hidden");
-  document.getElementById("orderView").classList.remove("hidden");
-}
-
-function showInventory() {
-  hideAll();
-  document.getElementById("inventoryView").classList.remove("hidden");
-}
-
 function hideAll() {
   document.querySelectorAll(".panel").forEach(p => {
     p.classList.add("hidden");
   });
+}
+
+function showMenu() {
+  hideAll();
+
+  document.getElementById("salesView")?.classList.remove("hidden");
+  document.getElementById("orderView")?.classList.remove("hidden");
+}
+
+function showInventory() {
+  hideAll();
+
+  document.getElementById("inventoryView")?.classList.remove("hidden");
+}
+
+// 🔥 FALTABAN ESTAS (ERAN EL BUG)
+
+function showSalesHistory() {
+  alert("📊 Historial en construcción 😅");
+}
+
+function showCorteHoy() {
+  alert("💰 Corte del día en construcción 😅");
+}
+
+function showReports() {
+  hideAll();
+
+  const view = document.getElementById("reportsView");
+
+  if (view) {
+    view.classList.remove("hidden");
+  } else {
+    alert("❌ No existe reportsView");
+  }
 }
 
 // ===============================
@@ -110,11 +149,16 @@ function hideAll() {
 // ===============================
 function addToOrder(id) {
   const p = menu.find(x => x.id === id);
+
   if (!p || p.stock <= 0) return;
 
   const ex = order.find(x => x.id === id);
-  if (ex) ex.qty++;
-  else order.push({ ...p, qty: 1 });
+
+  if (ex) {
+    ex.qty++;
+  } else {
+    order.push({ ...p, qty: 1 });
+  }
 
   renderOrder();
 }
@@ -122,17 +166,24 @@ function addToOrder(id) {
 function renderOrder() {
   const d = document.getElementById("order");
   const t = document.getElementById("total");
+
+  if (!d || !t) return;
+
   d.innerHTML = "";
+
   let total = 0;
 
   order.forEach(i => {
     const sub = i.price * i.qty;
     total += sub;
+
     const el = document.createElement("div");
+
     el.innerHTML = `
       ${i.name} x${i.qty} → $${sub}
       <button onclick="removeItem(${i.id})">✕</button>
     `;
+
     d.appendChild(el);
   });
 
@@ -149,6 +200,8 @@ function removeItem(id) {
 // ===============================
 async function editInv(id) {
   const p = menu.find(x => x.id === id);
+  if (!p) return;
+
   const name = prompt("Nombre", p.name);
   const price = parseFloat(prompt("Precio", p.price));
   const stock = parseInt(prompt("Stock", p.stock));
@@ -169,6 +222,7 @@ async function addStock(id) {
   if (!amount) return;
 
   const p = menu.find(x => x.id === id);
+  if (!p) return;
 
   await fetch(`${API_URL}/api/products/${id}`, {
     method: "PUT",
@@ -208,7 +262,10 @@ async function addProduct() {
 async function checkout() {
   if (!order.length) return;
 
-  const total = order.reduce((s, i) => s + i.price * i.qty, 0);
+  const total = order.reduce(
+    (s, i) => s + i.price * i.qty,
+    0
+  );
 
   await fetch(`${API_URL}/api/sales`, {
     method: "POST",
@@ -216,7 +273,8 @@ async function checkout() {
     body: JSON.stringify({ items: order, total })
   });
 
-  alert("Venta realizada: $" + total);
+  alert("✅ Venta realizada: $" + total);
+
   order = [];
   renderOrder();
   loadMenu();

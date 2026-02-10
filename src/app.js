@@ -14,7 +14,7 @@ const { Pool } = require("pg");
 // CONFIG
 // ================================
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 if (!process.env.DATABASE_URL) {
   console.error("❌ DATABASE_URL no encontrada");

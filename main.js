@@ -18,7 +18,7 @@ function createWindow() {
 
   if (isDev) {
     // Modo desarrollo (tu compu)
-    mainWindow.loadURL('http://localhost:5000');
+    mainWindow.loadURL('http://localhost:10000');
   } else {
     // Modo producción (Render)
     mainWindow.loadURL('https://cafeteria-pos.onrender.com');

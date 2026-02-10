@@ -270,10 +270,7 @@ async function addProduct() {
 async function checkout() {
   if (!order.length) return;
 
-  const total = order.reduce(
-    (s, i) => s + i.price * i.qty,
-    0
-  );
+  const total = order.reduce((s, i) => s + i.price * i.qty, 0);
 
   await fetch(`${API_URL}/api/sales`, {
     method: "POST",
@@ -281,12 +278,17 @@ async function checkout() {
     body: JSON.stringify({ items: order, total })
   });
 
-  alert("✅ Venta realizada: $" + total);
+  alert("Venta realizada: $" + total);
 
+  // Limpiar orden
   order = [];
   renderOrder();
-  loadMenu();
+
+  // 🔥 FORZAR recarga real desde servidor
+  await loadMenu();
 }
+
+
 // ===============================
 // HISTORIAL
 // ===============================

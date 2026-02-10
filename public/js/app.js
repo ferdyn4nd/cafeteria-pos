@@ -24,14 +24,21 @@ setInterval(loadMenu, 5000);
 async function loadMenu() {
   try {
     const res = await fetch(`${API_URL}/api/products`);
-    menu = await res.json();
+    const data = await res.json();
+
+    // 🔒 Blindar stock null
+    menu = data.map(p => ({
+      ...p,
+      stock: p.stock ?? 0
+    }));
 
     renderMenu();
     renderInventory();
   } catch (err) {
-    console.error("❌ Error cargando productos", err);
+    console.error("Error cargando productos", err);
   }
 }
+
 
 // ===============================
 // MENU
@@ -47,7 +54,8 @@ function renderMenu() {
 
     el.innerHTML = `
       <span>
-        <b>${p.name}</b> | $${p.price} | Stock: ${p.stock ?? 0}
+        <b>${p.name}</b> | $${p.price} |Stock: ${p.stock ?? 0}
+
       </span>
 
       <span>
@@ -88,7 +96,7 @@ function renderInventory() {
     tr.innerHTML = `
       <td>${p.name}</td>
       <td>$${p.price}</td>
-      <td>${p.stock ?? 0}</td>
+<td>${p.stock ?? 0}</td>
 
       <td>
         <button onclick="editInv(${p.id})">✏️</button>

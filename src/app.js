@@ -4,7 +4,6 @@
 // ================================
 
 require("dotenv").config();
-
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
@@ -13,7 +12,6 @@ const { Pool } = require("pg");
 // ================================
 // CONFIG
 // ================================
-
 const PORT = process.env.PORT || 10000;
 
 if (!process.env.DATABASE_URL) {
@@ -23,15 +21,12 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: { rejectUnauthorized: false },
 });
 
 // ================================
 // TEST DB
 // ================================
-
 async function testDB() {
   try {
     const res = await pool.query("SELECT NOW()");
@@ -40,15 +35,12 @@ async function testDB() {
     console.error("❌ Error DB:", err.message);
   }
 }
-
 testDB();
 
 // ================================
 // INIT APP
 // ================================
-
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
@@ -56,7 +48,6 @@ app.use(express.static(path.join(__dirname, "../public")));
 // ================================
 // INIT DATABASE
 // ================================
-
 async function initDB() {
   try {
     await pool.query(`
@@ -94,13 +85,9 @@ async function initDB() {
 }
 
 initDB().then(async () => {
-
   const check = await pool.query("SELECT COUNT(*) FROM products");
-
   if (parseInt(check.rows[0].count) === 0) {
-
     console.log("⚡ Base vacía, cargando productos iniciales...");
-
     await pool.query(`
       INSERT INTO products (name, price, stock) VALUES
       ('Café Americano', 30, 20),
@@ -109,101 +96,62 @@ initDB().then(async () => {
       ('Chocolate', 35, 12),
       ('Pan Dulce', 15, 25)
     `);
-
     console.log("✅ Productos iniciales cargados");
   }
-
 });
 
 // ================================
 // PRODUCTS
 // ================================
-
-// Obtener
 app.get("/api/products", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM products ORDER BY id DESC"
-    );
+    const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
 
-// Crear
 app.post("/api/products", async (req, res) => {
   try {
     const { name, price, stock } = req.body;
-
-    if (!name || !price) {
-      return res.status(400).json({ error: "Datos incompletos" });
-    }
-
     const result = await pool.query(
-      `
-      INSERT INTO products (name, price, stock)
-      VALUES ($1,$2,$3)
-      RETURNING id
-      `,
+      "INSERT INTO products (name, price, stock) VALUES ($1,$2,$3) RETURNING id",
       [name, price, stock || 0]
     );
-
     res.json({ id: result.rows[0].id });
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Error al crear producto" });
   }
 });
 
-// Actualizar
 app.put("/api/products/:id", async (req, res) => {
   try {
-    const { id } = req.params;
     const { name, price, stock } = req.body;
-
     await pool.query(
-      `
-      UPDATE products
-      SET name=$1, price=$2, stock=$3
-      WHERE id=$4
-      `,
-      [name, price, stock, id]
+      "UPDATE products SET name=$1, price=$2, stock=$3 WHERE id=$4",
+      [name, price, stock, req.params.id]
     );
-
     res.json({ success: true });
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Error al actualizar" });
   }
 });
 
-// Borrar
 app.delete("/api/products/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    await pool.query(
-      "DELETE FROM products WHERE id=$1",
-      [id]
-    );
-
+    await pool.query("DELETE FROM products WHERE id=$1", [req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Error al borrar" });
   }
 });
 
 // ================================
-// SALES
+// SALES (STOCK CORRECTO)
 // ================================
-
-// Crear venta
 app.post("/api/sales", async (req, res) => {
   const { items, total } = req.body;
-
   if (!items || !items.length) {
     return res.status(400).json({ error: "Sin productos" });
   }
@@ -217,131 +165,99 @@ app.post("/api/sales", async (req, res) => {
       "INSERT INTO sales (total) VALUES ($1) RETURNING id",
       [total]
     );
-
     const saleId = sale.rows[0].id;
 
     for (const item of items) {
+      const check = await client.query(
+        "SELECT stock FROM products WHERE id=$1 FOR UPDATE",
+        [item.id]
+      );
+
+      if (check.rows[0].stock < item.quantity) {
+        throw new Error("Stock insuficiente");
+      }
+
       await client.query(
-        `
-        INSERT INTO sale_items
-        (sale_id, product_id, quantity, price)
-        VALUES ($1,$2,$3,$4)
-        `,
+        "INSERT INTO sale_items (sale_id, product_id, quantity, price) VALUES ($1,$2,$3,$4)",
         [saleId, item.id, item.quantity, item.price]
       );
 
       await client.query(
-        `
-        UPDATE products
-        SET stock = stock - $1
-        WHERE id = $2
-        `,
+        "UPDATE products SET stock = stock - $1 WHERE id = $2",
         [item.quantity, item.id]
       );
     }
 
     await client.query("COMMIT");
-
     res.json({ success: true });
 
   } catch (err) {
-
     await client.query("ROLLBACK");
-    console.error(err);
-
-    res.status(500).json({ error: "Error en venta" });
-
+    res.status(500).json({ error: err.message });
   } finally {
     client.release();
   }
 });
 
 // ================================
-// HISTORIAL CON DETALLE
+// HISTORIAL
 // ================================
 app.get("/api/sales", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        s.id,
-        s.total,
-        s.created_at,
-        json_agg(
-          json_build_object(
-            'name', p.name,
-            'price', si.price,
-            'quantity', si.quantity
-          )
-        ) AS items
+      SELECT s.id, s.total, s.created_at,
+      json_agg(json_build_object(
+        'name', p.name,
+        'quantity', si.quantity,
+        'price', si.price
+      )) AS items
       FROM sales s
-      LEFT JOIN sale_items si ON s.id = si.sale_id
-      LEFT JOIN products p ON p.id = si.product_id
+      JOIN sale_items si ON si.sale_id = s.id
+      JOIN products p ON p.id = si.product_id
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `);
-
     res.json(result.rows);
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Error historial" });
   }
 });
 
-
 // ================================
-// CORTE Y REPORTES
+// REPORTES
 // ================================
 app.get("/api/reports", async (req, res) => {
   try {
-
-    // Hoy
-    const today = await pool.query(`
-      SELECT COALESCE(SUM(total),0) AS total
-      FROM sales
-      WHERE DATE(created_at) = CURRENT_DATE
-    `);
-
-    // Semana
-    const week = await pool.query(`
-      SELECT COALESCE(SUM(total),0) AS total
-      FROM sales
-      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-    `);
-
-    // Mes
-    const month = await pool.query(`
-      SELECT COALESCE(SUM(total),0) AS total
-      FROM sales
-      WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-    `);
+    const today = await pool.query(
+      "SELECT COALESCE(SUM(total),0) total FROM sales WHERE DATE(created_at)=CURRENT_DATE"
+    );
+    const week = await pool.query(
+      "SELECT COALESCE(SUM(total),0) total FROM sales WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'"
+    );
+    const month = await pool.query(
+      "SELECT COALESCE(SUM(total),0) total FROM sales WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'"
+    );
 
     res.json({
       today: today.rows[0].total,
       week: week.rows[0].total,
-      month: month.rows[0].total
+      month: month.rows[0].total,
     });
-
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Error reportes" });
   }
 });
 
-
 // ================================
 // FRONTEND
 // ================================
-
 app.get("*", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "../public/index.html")
-  );
+  res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
 // ================================
 // START SERVER
 // ================================
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });

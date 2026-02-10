@@ -279,3 +279,88 @@ async function checkout() {
   renderOrder();
   loadMenu();
 }
+// ===============================
+// HISTORIAL
+// ===============================
+async function showSalesHistory() {
+
+  hideAll();
+
+  let view = document.getElementById("reportsView");
+  view.classList.remove("hidden");
+
+  view.innerHTML = "<h2>📊 Historial de Ventas</h2>";
+
+  const res = await fetch("/api/sales");
+  const data = await res.json();
+
+  if (!data.length) {
+    view.innerHTML += "<p>Sin ventas</p>";
+    return;
+  }
+
+  data.forEach(sale => {
+
+    let html = `
+      <div style="border:1px solid #444;padding:10px;margin:10px;">
+        <b>Venta #${sale.id}</b><br>
+        Fecha: ${new Date(sale.created_at).toLocaleString()}<br>
+        Total: $${sale.total}
+        <ul>
+    `;
+
+    sale.items.forEach(i => {
+      html += `
+        <li>
+          ${i.name} x${i.quantity} → $${i.price * i.quantity}
+        </li>
+      `;
+    });
+
+    html += "</ul></div>";
+
+    view.innerHTML += html;
+
+  });
+}
+
+
+// ===============================
+// CORTE DEL DÍA
+// ===============================
+async function showCorteHoy() {
+
+  const res = await fetch("/api/reports");
+  const data = await res.json();
+
+  alert(`
+💰 CORTE DE HOY
+
+Total: $${data.today}
+  `);
+
+}
+
+
+// ===============================
+// REPORTES
+// ===============================
+async function showReports() {
+
+  hideAll();
+
+  const res = await fetch("/api/reports");
+  const data = await res.json();
+
+  const view = document.getElementById("reportsView");
+
+  view.classList.remove("hidden");
+
+  view.innerHTML = `
+    <h2>📈 Reportes</h2>
+
+    <p>Hoy: $${data.today}</p>
+    <p>Semana: $${data.week}</p>
+    <p>Mes: $${data.month}</p>
+  `;
+}

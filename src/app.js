@@ -256,12 +256,29 @@ app.post("/api/sales", async (req, res) => {
   }
 });
 
-// Historial
+// ================================
+// HISTORIAL CON DETALLE
+// ================================
 app.get("/api/sales", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM sales ORDER BY id DESC"
-    );
+    const result = await pool.query(`
+      SELECT 
+        s.id,
+        s.total,
+        s.created_at,
+        json_agg(
+          json_build_object(
+            'name', p.name,
+            'price', si.price,
+            'quantity', si.quantity
+          )
+        ) AS items
+      FROM sales s
+      LEFT JOIN sale_items si ON s.id = si.sale_id
+      LEFT JOIN products p ON p.id = si.product_id
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+    `);
 
     res.json(result.rows);
   } catch (err) {
@@ -270,20 +287,38 @@ app.get("/api/sales", async (req, res) => {
   }
 });
 
-// Reportes
+
+// ================================
+// CORTE Y REPORTES
+// ================================
 app.get("/api/reports", async (req, res) => {
   try {
-    const total = await pool.query(
-      "SELECT SUM(total) FROM sales"
-    );
 
-    const count = await pool.query(
-      "SELECT COUNT(*) FROM sales"
-    );
+    // Hoy
+    const today = await pool.query(`
+      SELECT COALESCE(SUM(total),0) AS total
+      FROM sales
+      WHERE DATE(created_at) = CURRENT_DATE
+    `);
+
+    // Semana
+    const week = await pool.query(`
+      SELECT COALESCE(SUM(total),0) AS total
+      FROM sales
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+    `);
+
+    // Mes
+    const month = await pool.query(`
+      SELECT COALESCE(SUM(total),0) AS total
+      FROM sales
+      WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+    `);
 
     res.json({
-      total: total.rows[0].sum || 0,
-      ventas: count.rows[0].count || 0,
+      today: today.rows[0].total,
+      week: week.rows[0].total,
+      month: month.rows[0].total
     });
 
   } catch (err) {
@@ -291,6 +326,7 @@ app.get("/api/reports", async (req, res) => {
     res.status(500).json({ error: "Error reportes" });
   }
 });
+
 
 // ================================
 // FRONTEND

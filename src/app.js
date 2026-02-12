@@ -148,10 +148,12 @@ app.delete("/api/products/:id", async (req, res) => {
 });
 
 // ================================
-// SALES (STOCK CORRECTO)
+// CREAR VENTA (CON STOCK BIEN)
 // ================================
 app.post("/api/sales", async (req, res) => {
+
   const { items, total } = req.body;
+
   if (!items || !items.length) {
     return res.status(400).json({ error: "Sin productos" });
   }
@@ -159,44 +161,77 @@ app.post("/api/sales", async (req, res) => {
   const client = await pool.connect();
 
   try {
+
     await client.query("BEGIN");
 
+    // 1️⃣ Crear venta
     const sale = await client.query(
       "INSERT INTO sales (total) VALUES ($1) RETURNING id",
       [total]
     );
+
     const saleId = sale.rows[0].id;
 
+    // 2️⃣ Procesar productos
     for (const item of items) {
+
+      // 🔒 Bloquear producto
       const check = await client.query(
-        "SELECT stock FROM products WHERE id=$1 FOR UPDATE",
+        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
         [item.id]
       );
 
-      if (check.rows[0].stock < item.quantity) {
+      if (check.rows.length === 0) {
+        throw new Error("Producto no existe");
+      }
+
+      const currentStock = check.rows[0].stock;
+
+      // ❌ Validar stock
+      if (currentStock < item.qty) {
         throw new Error("Stock insuficiente");
       }
 
+      // 🧾 Guardar detalle
       await client.query(
-        "INSERT INTO sale_items (sale_id, product_id, quantity, price) VALUES ($1,$2,$3,$4)",
-        [saleId, item.id, item.quantity, item.price]
+        `
+        INSERT INTO sale_items
+        (sale_id, product_id, quantity, price)
+        VALUES ($1,$2,$3,$4)
+        `,
+        [saleId, item.id, item.qty, item.price]
       );
 
+      // 📦 Descontar bien
       await client.query(
-        "UPDATE products SET stock = stock - $1 WHERE id = $2",
-        [item.quantity, item.id]
+        `
+        UPDATE products
+        SET stock = stock - $1
+        WHERE id = $2
+        `,
+        [item.qty, item.id]
       );
     }
 
+    // 3️⃣ Confirmar
     await client.query("COMMIT");
+
     res.json({ success: true });
 
   } catch (err) {
+
     await client.query("ROLLBACK");
-    res.status(500).json({ error: err.message });
+
+    console.error("❌ Error venta:", err.message);
+
+    res.status(500).json({
+      error: err.message
+    });
+
   } finally {
     client.release();
   }
+
 });
 
 // ================================
